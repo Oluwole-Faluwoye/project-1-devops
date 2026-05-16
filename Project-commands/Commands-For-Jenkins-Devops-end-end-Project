@@ -87,6 +87,7 @@ change it to  your choice
 Click Manually
 Project key:
 devops-app
+
 3. Generate token
 
 Go to:
@@ -97,7 +98,7 @@ Create:
 
 Name: jenkins-token
 
-Type : Project Token
+Type : User Token
 
 Copy The Token 
 
@@ -233,29 +234,7 @@ stage('SonarQube Scan') {
   }
 }
 
------------------------------------------------------------------------
 
-
-5. NODE BUILD IMPROVEMENT (VERY IMPORTANT)
-
-Right now:
-
-sh 'npm install'
-
-👉 This will FAIL because Jenkins runs in container without Node
-
-✅ Replace with Docker Node:
-stage('Build App') {
-  steps {
-    sh '''
-    docker run --rm \
-      -v $(pwd)/app:/app \
-      -w /app \
-      node:18 \
-      npm install
-    '''
-  }
-}
 
 --------------------------------------------------
 
