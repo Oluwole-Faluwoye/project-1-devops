@@ -28,7 +28,7 @@ sudo rm -rf /var/lib/docker/volumes/jenkins_home/_data/workspace/*
 
 MPORTANT
 
-This does NOT delete:
+This does NOT delete: .....
 
 ✔ Jenkins jobs
 ✔ credentials
