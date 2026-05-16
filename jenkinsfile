@@ -18,16 +18,12 @@ pipeline {
     }
 
     stage('Build App') {
-      steps {
-        sh '''
-        docker run --rm \
-          -v $(pwd)/app:/app \
-          -w /app \
-          node:18 \
-          npm install
-        '''
-      }
+  steps {
+    dir('app') {
+      sh 'npm install'
     }
+  }
+}
 
     stage('SonarQube Scan') {
       steps {

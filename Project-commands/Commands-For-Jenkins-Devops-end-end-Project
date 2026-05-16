@@ -668,7 +668,18 @@ exit
 
 sudo chmod 666 /var/run/docker.sock
 
+------------------------------------------------------------------------
+Because Node was installed previously on the EC2 instance, and Jenkins inside container, we were having issues  (YOU NEED NODE IN JENKINS)
 
+Run these commands on Jenkins instance 
+
+docker exec -u 0 -it jenkins bash
+
+apt update
+
+apt install -y nodejs npm
+
+exit
 -------------------------------------------------------------------------------------------
 YET TO TEST 
 --------------------------------------------------------
