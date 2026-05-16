@@ -25,11 +25,13 @@ pipeline {
 
     stage('Build App') {
       steps {
-        dir('app') {
-          sh '''
+        sh '''
+          docker run --rm \
+            -v $(pwd)/app:/app \
+            -w /app \
+            node:18 \
             npm install
-          '''
-        }
+        '''
       }
     }
 
@@ -109,7 +111,7 @@ pipeline {
       }
     }
 
-  }  // ✅ THIS WAS MISSING
+  }
 
   post {
     success {
