@@ -8,11 +8,20 @@ pipeline {
 
   stages {
 
+    stage('Debug Path') {
+      steps {
+        sh '''
+        pwd
+        ls -R /var/jenkins_home/workspace/Devops-1-Project
+        '''
+      }
+    }
+
     stage('Build App') {
       steps {
         sh '''
         docker run --rm \
-          -v $(pwd)/app:/app \
+          -v /var/jenkins_home/workspace/Devops-1-Project/app:/app \
           -w /app \
           node:18 \
           npm install
@@ -26,7 +35,7 @@ pipeline {
           withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
             sh '''
             docker run --rm \
-              -v $(pwd):/usr/src \
+              -v /var/jenkins_home/workspace/Devops-1-Project:/usr/src \
               -w /usr/src \
               sonarsource/sonar-scanner-cli \
               -Dsonar.projectKey=my-app \
@@ -49,7 +58,7 @@ pipeline {
 
     stage('Docker Build') {
       steps {
-        sh 'docker build -t my-app:latest ./app'
+        sh 'docker build -t my-app:latest /var/jenkins_home/workspace/Devops-1-Project/app'
       }
     }
 
@@ -86,7 +95,7 @@ pipeline {
         docker run --rm \
           -v $HOME/.kube:/root/.kube \
           -v /home/ec2-user/.aws:/root/.aws \
-          -v $(pwd):/workspace \
+          -v /var/jenkins_home/workspace/Devops-1-Project:/workspace \
           -w /workspace \
           alpine/helm:3.14.0 \
           upgrade --install my-app ./helm/my-app \
