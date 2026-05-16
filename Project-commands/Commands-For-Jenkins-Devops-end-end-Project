@@ -24,9 +24,22 @@ terraform plan
 terraform apply
 
 
+PHASE 1 — VERIFY BASE ENVIRONMENT
+
+SSH into your Jenkins EC2 and confirm:
+
+docker ps
+kubectl get nodes
+helm version
+aws sts get-caller-identity
+
 Update both the Kubectl files of both your local machine and your jenkins machine with this.  ( i.e paste these commands on both machines)
 
-Then test immediately : 
+( To update the kubectl on your jenkins machine SSH into your jenkins machine)
+
+Then test immediately first on your local machine : 
+
+Run the following codes
 
 aws eks update-kubeconfig \
   --region us-east-1 \
@@ -34,78 +47,61 @@ aws eks update-kubeconfig \
 
 
 
+Then test immediately first on your local machine :
+
 Step 3 — Test cluster access
 
 kubectl get nodes
 
+----------------------------------------------------------------
+
+Set up your Jenkins
+
+Create project manually 
+
+Go to Jenkins:
+
+http://<EC2-IP>:8080
+
 ------------------------------------------------------------------
  to get your jenkins password 
 
- run this command : docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+ run this command  on the jenkins machine : docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
 ------------------------------------------------------------------------------
 
 Set up your Sonarqube
 
-Create project manually 
-
-Go to SonarQube:
-
 http://<EC2-IP>:9000
-👉 Click:
+
+original
+
+username = admin
+
+password is admin
+
+change it to  your choice
+
+
+2. Create project
+Click Manually
+Project key:
+devops-app
+3. Generate token
+
+Go to:
+
 Top right → My Account → Security
-Create token:
+
+Create:
+
 Name: jenkins-token
-Click Generate
-COPY IT ⚠️
----------------------------------------------------------------------------------
-STEP 1 — Jenkins Credentials (production best practice)
 
-Go to:
+Type : Project Token
 
-Jenkins → Manage Jenkins → Credentials → Global
+Copy The Token 
 
-✅ 1. SonarQube token
-Type: Secret Text
-ID: sonar-token
-Value: (your Sonar token)
-❗ 2. AWS credentials?
 
-👉 DO NOT ADD ANY
-
-You already did the correct thing:
-
-EC2 IAM ROLE → provides AWS access ✅
-
-This is production best practice.
-
-⚙️ STEP 2 — Configure SonarQube in Jenkins
-
-Go to:
-
-Manage Jenkins → System
-
-Add:
-
-Name: sonarqube
-URL: http://<EC2-IP>:9000
-Credentials: sonar-token
-🧪 STEP 3 — SonarQube Quality Gate
-
-Go to SonarQube:
-
-http://<EC2-IP>:9000
-Create Quality Gate
-
-Quality Gates → Create
-
-Add rules:
-
-Bugs > 0 → FAIL
-Vulnerabilities > 0 → FAIL
-Coverage < 70% → FAIL
-
-👉 Set as default
 
 📦 STEP 4 — Prepare your app repo
 
@@ -128,10 +124,465 @@ terraform output ecr_repo_url
 Example:
 
 761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo
-🚀 STEP 6 — Create Jenkins Pipeline Job
-New Item → Pipeline
-Name: devops-final
 
+---------------------------------------------------------------------------------
+
+1. TRIVY — You are already doing it RIGHT
+
+Your Jenkinsfile:
+
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy image ...
+
+👉 This means:
+
+Trivy runs as a container ✅
+NO installation needed on EC2 ✅
+🎯 So the answer:
+You do NOT need to install Trivy ❌
+You do NOT need Terraform changes ❌
+
+👉 Your current setup is already best practice
+
+2. YOUR REAL PROBLEM → Helm
+
+You ran:
+
+helm version
+
+and got:
+
+command not found ❌
+But your pipeline uses:
+docker run ... alpine/helm ...
+
+👉 That means:
+
+Helm is ALSO running as a container ✅
+
+🚨 BUT you are missing ONE CRITICAL THING
+
+Your Helm container does NOT have AWS auth
+
+So this will fail:
+
+helm upgrade --install ...
+🔥 3. FIX YOUR HELM DEPLOYMENT (IMPORTANT)
+
+You must pass AWS + kubeconfig into the container
+
+Replace your Helm stage with this:
+
+------------------------------------------------------------------------------
+
+stage('Deploy to EKS (Helm)') {
+  steps {
+    sh '''
+    aws eks update-kubeconfig --region $AWS_REGION --name devops-cluster
+
+    docker run --rm \
+      -v $HOME/.kube:/root/.kube \
+      -v /home/ec2-user/.aws:/root/.aws \
+      -v $(pwd):/workspace \
+      -w /workspace \
+      alpine/helm:3.14.0 \
+      upgrade --install my-app ./helm/my-app \
+      --set image.repository=$ECR_REPO \
+      --set image.tag=latest
+    '''
+  }
+}
+
+--------------------------------------------------------------------------
+
+Why this works
+.kube → gives cluster access
+.aws → gives IAM auth
+workspace → gives Helm chart
+
+---------------------------------------------------------
+
+YOUR SONARQUBE BUG (IMPORTANT)
+
+Right now you have:
+
+-Dsonar.login=$SONAR_AUTH_TOKEN ❌
+
+👉 This will FAIL unless you define it
+
+------------------------------------------------------------
+
+Fix it properly
+
+stage('SonarQube Scan') {
+  steps {
+    withSonarQubeEnv('sonarqube') {
+      withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+        sh '''
+        docker run --rm \
+          -v $(pwd):/usr/src \
+          sonarsource/sonar-scanner-cli \
+          -Dsonar.projectKey=my-app \
+          -Dsonar.sources=app \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.login=$SONAR_TOKEN
+        '''
+      }
+    }
+  }
+}
+
+-----------------------------------------------------------------------
+
+
+5. NODE BUILD IMPROVEMENT (VERY IMPORTANT)
+
+Right now:
+
+sh 'npm install'
+
+👉 This will FAIL because Jenkins runs in container without Node
+
+✅ Replace with Docker Node:
+stage('Build App') {
+  steps {
+    sh '''
+    docker run --rm \
+      -v $(pwd)/app:/app \
+      -w /app \
+      node:18 \
+      npm install
+    '''
+  }
+}
+
+--------------------------------------------------
+
+FINAL ANSWERS TO YOUR QUESTIONS
+❓ Do I need Trivy installed?
+NO ❌
+You are already using containerized Trivy ✅
+❓ Do I need Helm installed?
+NO ❌
+You are using Helm container ✅
+❓ Does kubectl help?
+YES ✅ (used to generate kubeconfig)
+BUT not enough for Helm deployment
+
+Should I modify Terraform for Trivy?
+NO ❌
+Pipeline handles it already ✅
+🔥 WHAT YOU SHOULD DO RIGHT NOW
+Fix SonarQube token usage
+Replace Node build with Docker Node
+Fix Helm stage (VERY IMPORTANT)
+
+
+Edit your project url in your Jenkinsfile
+
+You can use this version of helm, its widely available and supported   
+helm:3.12.0
+--------------------------------------------------
+
+SONARQUBE QUALITY GATES (CODE QUALITY RULES)
+✅ Step 1 — Go to Quality Gates
+
+Open SonarQube:
+
+http://<EC2-IP>:9000
+
+Navigate:
+
+Quality Gates → Create
+✅ Step 2 — Create your gate
+
+Name it:
+
+DevOps-Production-Gate
+✅ Step 3 — Add conditions (THIS is the important part)
+
+Click Add Condition and add these:
+
+Critical ones
+Bugs > 0 → FAIL
+Vulnerabilities > 0 → FAIL
+Security Hotspots Reviewed < 100% → FAIL
+🟡 Code quality
+Code Smells > 50 → FAIL
+Coverage < 80% → FAIL
+Duplications > 3% → FAIL
+🎯 For your Node app (simple version)
+
+If you want lean setup:
+
+Bugs > 0
+Vulnerabilities > 0
+
+👉 That alone is enough for your project
+
+✅ Step 4 — Set as default
+
+Click:
+
+Set as Default
+
+✅ Step 5 — Attach to your project
+
+Go:
+
+Projects → your project → Project Settings → Quality Gate
+
+Select:
+
+Always use the instance default Quality Gate
+
+Current:
+
+DevOps-Production-Gate
+
+
+🔗 PART 2 — SONARQUBE → JENKINS WEBHOOK (VERY IMPORTANT)
+
+This is what makes:
+
+waitForQualityGate()
+
+actually work.
+
+✅ Step 1 — Create webhook in SonarQube
+
+Go:
+
+Administration → click on Configuration → Webhooks
+
+Click:
+
+Create
+Fill:
+
+Name:
+
+jenkins-webhook
+
+URL:
+
+http://<JENKINS-EC2-IP>:8080/sonarqube-webhook/
+
+------------------------------------------------------------------
+SonarQube → Jenkins (Quality Gate webhook)
+✅ Use: PRIVATE IP
+
+http://<PRIVATE-IP>:8080/sonarqube-webhook/
+🧠 Why?
+Both services are on the same EC2
+Traffic stays inside the instance/network
+Faster + more secure
+No need to expose internally
+-----------------------------------------------------------------------
+
+⚠️ IMPORTANT:
+
+must end with /
+must be publicly accessible... If on same instance you can use private IP
+✅ Step 2 — Save
+🎯 What this does
+
+After scan:
+
+SonarQube → sends result → Jenkins
+
+Then Jenkins:
+
+waitForQualityGate → continues OR fails
+
+--------------------------------------------------------------------------
+🔗 PART 3 — GITHUB → JENKINS WEBHOOK (AUTO TRIGGER PIPELINE)
+
+--------------------------------------------------------
+
+a. GitHub → Jenkins (CI trigger webhook)
+✅ For Github -n Jenkins webhook, Use: PUBLIC IP
+
+Example:
+
+http://<PUBLIC-IP>:8080/github-webhook/
+🧠 Why?
+GitHub is external (internet)
+It cannot reach private IP (10.x.x.x)
+
+-------------------------------------------------------------
+✅ Step 1 — Go to your repo in GitHub
+
+Click:
+
+Settings → Webhooks → Add Webhook
+Fill:
+
+Payload URL:
+
+http://<JENKINS-EC2-IP>:8080/github-webhook/
+
+Content type:
+
+application/json
+
+Events:
+
+Just the push event
+
+Click:
+
+Add webhook
+
+------------------------------------------------------------
+
+PHASE 7 — CREATE JENKINS JOB
+
+Devops-1-Project
+
+In Jenkins:
+
+New Item → Pipeline
+
+select : GitHub project
+
+Project url : Paste project url here
+
+Triggers  :  GitHub hook trigger for GITScm polling
+
+
+Set:
+
+Pipeline Definition : Pipeline from SCM
+
+SCM : Git
+Repository URL : Paste your github url  for your project 
+
+Branch → */main
+
+Script Path → Jenkinsfile
+
+----------------------------------------------------
+
+
+
+PART 4 — VERIFY EVERYTHING
+Test SonarQube → Jenkins
+
+Run pipeline once.
+
+Then check:
+
+SonarQube → Project → Background Tasks → Webhook
+
+You should see:
+
+200 OK ✅
+Test GitHub → Jenkins
+
+Push code:
+
+git commit -m "test webhook"
+git push
+
+👉 Jenkins should auto-trigger
+---------------------------------------------------
+
+
+⚠️ VERY IMPORTANT (Security Group)
+
+Make sure your EC2 allows:
+
+Port 8080 → inbound → 0.0.0.0/0 (for now)
+
+👉 otherwise webhooks will fail silently
+
+🔥 WHAT ABOUT PRODUCTION?
+
+Now let’s level up your thinking 👇
+
+❌ What you should NOT do in production
+Use raw public IP ❌
+Expose Jenkins directly ❌
+✅ Production approach
+1. Use a domain name
+
+Example:
+https://jenkins.mycompany.com
+2. Put Jenkins behind a Load Balancer
+
+Use:
+
+ALB (Application Load Balancer)
+3. Enable HTTPS (SSL)
+Use AWS ACM certificate
+4. Webhooks become:
+GitHub → https://jenkins.mycompany.com/github-webhook/
+SonarQube → http://jenkins:8080/sonarqube-webhook/ (internal)
+🧠 Clean production architecture
+
+GitHub
+   ↓
+Internet
+   ↓
+ALB (HTTPS)
+   ↓
+Jenkins (private subnet)
+
+SonarQube → Jenkins (internal VPC)
+
+-----------------------------------------------------------------
+
+
+PHASE 8 — RUN PIPELINE
+
+Click:
+
+Build Now
+
+PHASE 9 — VERIFY DEPLOYMENT
+
+SSH into EC2:
+
+kubectl get pods
+kubectl get svc
+🌐 Get app URL
+
+Look for:
+
+EXTERNAL-IP
+
+Open:
+
+http://<EXTERNAL-IP>
+
+-------------------------------------------------------------
+
+COMMON MISTAKES
+❌ Webhook not working
+Missing / at end of URL
+EC2 security group blocking port 8080
+Jenkins not public
+❌ Quality gate stuck
+Webhook not configured
+Wrong Sonar server name in Jenkins
+❌ Pipeline never triggers
+Forgot GitHub webhook
+Forgot Jenkins trigger checkbox
+
+------------------------------------------------------------------------
+
+Run pipeline
+🚀 WHAT WILL HAPPEN AFTER
+GitHub → Jenkins →
+Node build →
+SonarQube →
+Trivy →
+ECR →
+Helm →
+EKS →
+LIVE APP 🚀
 
 
 

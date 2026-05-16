@@ -1,5 +1,5 @@
 image:
-  repository: REPLACE_ME
+  repository: 761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo
   tag: latest
 
 replicaCount: 2
