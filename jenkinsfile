@@ -6,13 +6,6 @@ pipeline {
     ECR_REPO = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
   }
 
-  stages {
-
-    stage('Checkout') {
-      steps {
-        git 'https://github.com/Oluwole-Faluwoye/project-1-devops.git'
-      }
-    }
 
     stage('Build App') {
       steps {
