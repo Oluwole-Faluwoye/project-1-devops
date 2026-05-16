@@ -29,7 +29,7 @@ pipeline {
       steps {
         sh '''
         docker run --rm \
-          -v ${WORKSPACE}/app:/app \
+          -v /var/lib/docker/volumes/jenkins_home/_data/workspace/Devops-1-Project/app:/app \
           -w /app \
           node:18 \
           npm install
