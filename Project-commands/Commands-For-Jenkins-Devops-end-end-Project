@@ -565,6 +565,136 @@ ensure the name you used to store your jenkinsfile is what you used in the Jenki
 Note : It's case sensitive 
 
 --------------------------------------------------------------------
+if you run this project now without giving Jenkins container access to Docker you will have an error 
+ 
+ ( ALTHOUGH I HAVE FIXED THIS IN MY SETUP.SH THIS IS JUST TO GIVE CLARITY AND SHOW THE POWER OF DOCKER IF THE VOLUME IS MOUNTED )
+
+From your log:
+
+docker: not found
+
+👉 This means:
+
+Jenkins container does NOT have access to Docker ❌
+🧠 WHY THIS IS HAPPENING
+
+You installed Docker on the EC2 host, but:
+
+Jenkins is running inside a container
+
+👉 So inside Jenkins:
+
+docker command = missing ❌
+🔥 WHAT YOU NEED (CRITICAL CONCEPT)
+
+You must give Jenkins container access to:
+
+Docker daemon running on EC2 host
+
+This is done using:
+
+Docker socket (/var/run/docker.sock)
+
+-------------------------------------------------------------------------------
+
+THE SOLUTION 
+
+ YOUR CURRENT REALITY
+
+Your Jenkins container is already using:
+
+-v jenkins_home:/var/jenkins_home
+
+👉 That means:
+
+All your Jenkins data is stored in a Docker volume ✅
+NOT inside the container ❗
+🔥 WHAT THIS MEANS
+Stopping/removing container ❌ ≠ losing Jenkins data
+
+Your data (jobs, plugins, credentials, webhooks config, etc.) is in:
+
+jenkins_home (Docker volume) ✅
+✅ SO YOU ARE SAFE
+
+You can safely:
+
+docker rm jenkins
+
+👉 And NOTHING is lost.
+
+----------------------------------------------------------------------------
+
+SSH into Jenkins machine 
+
+WHAT YOU SHOULD DO (SAFE + CORRECT)
+
+
+🛑 STEP 1 — Stop & remove Jenkins container
+
+
+docker stop jenkins
+docker rm jenkins
+
+
+🚀 STEP 2 — Re-run Jenkins WITH Docker access
+
+
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  jenkins/jenkins:lts
+
+
+⚠️ STEP 3 — Fix permissions
+sudo chmod 666 /var/run/docker.sock
+
+
+AFTER RESTART
+
+Go back to:
+
+http://<EC2-IP>:8080
+
+👉 You will see:
+
+✔ Your jobs still there
+✔ SonarQube config still there
+✔ Credentials still there
+✔ Webhooks still working
+🧠 WHY THIS WORKS
+
+Because:
+
+Container = runtime
+Volume = storage
+
+You replaced the runtime, not the storage.
+
+------------------------------------------------------------------
+------------------------------------------------------------------
+
+✅ Updated Jenkins part of setup.sh
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  jenkins/jenkins:lts
+  
+🚀 OPTIONAL (BEST PRACTICE)
+
+Also add:
+
+sudo chmod 666 /var/run/docker.sock
+
+-------------------------------------------------------------------------------
+
+
 PHASE 8 — RUN PIPELINE
 
 Click:
