@@ -6,6 +6,7 @@ pipeline {
     ECR_REPO = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
   }
 
+  stages {
 
     stage('Build App') {
       steps {
@@ -87,7 +88,7 @@ pipeline {
           -v /home/ec2-user/.aws:/root/.aws \
           -v $(pwd):/workspace \
           -w /workspace \
-          alpine/helm:3.12.0 \
+          alpine/helm:3.14.0 \
           upgrade --install my-app ./helm/my-app \
           --set image.repository=$ECR_REPO \
           --set image.tag=latest
