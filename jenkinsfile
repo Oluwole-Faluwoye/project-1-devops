@@ -99,10 +99,9 @@ pipeline {
 
           docker run --rm \
             -v $HOME/.kube:/root/.kube \
-            -v /home/ec2-user/.aws:/root/.aws \
             -v $(pwd):/workspace \
             -w /workspace \
-            alpine/helm:3.14.0 \
+            alpine/helm:3.12.0 \
             upgrade --install my-app ./helm/my-app \
             --set image.repository=$ECR_REPO \
             --set image.tag=latest
@@ -110,7 +109,7 @@ pipeline {
       }
     }
 
-  }
+  }  // ✅ THIS WAS MISSING
 
   post {
     success {
