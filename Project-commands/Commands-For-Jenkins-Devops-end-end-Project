@@ -646,11 +646,77 @@ docker run -d \
   -p 50000:50000 \
   -v jenkins_home:/var/jenkins_home \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  jenkins/jenkins:lts
+  jenkins/jenkins:lts-jdk17
+
+⚠️ Then install Docker CLI inside container
+
+Run:
+
+docker exec -u 0 -it jenkins bash
+
+👉 -u 0 = root user
+
+Inside container:
+
+apt update
+apt install -y docker.io
+
+exit
 
 
 ⚠️ STEP 3 — Fix permissions
+
 sudo chmod 666 /var/run/docker.sock
+
+
+-------------------------------------------------------------------------------------------
+YET TO TEST 
+--------------------------------------------------------
+
+OPTION 2 (BETTER LONG TERM) — Build custom Jenkins image
+
+Instead of installing manually every time:
+
+Create Dockerfile
+FROM jenkins/jenkins:lts
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y docker.io
+
+USER jenkins
+Build image
+docker build -t jenkins-docker .
+
+Run it
+docker run -d \
+  --name jenkins \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  jenkins-docker
+🧪 VERIFY (IMPORTANT)
+
+After this, test inside Jenkins:
+
+pipeline {
+  agent any
+  stages {
+    stage('Test Docker') {
+      steps {
+        sh 'docker version'
+      }
+    }
+  }
+}
+
+👉 If it prints Docker version → FIXED ✅
+
+------------------------------------------------------------------
+-------------------------------------------------------------------
+
 
 
 AFTER RESTART
@@ -685,7 +751,7 @@ docker run -d \
   -v jenkins_home:/var/jenkins_home \
   -v /var/run/docker.sock:/var/run/docker.sock \
   jenkins/jenkins:lts
-  
+
 🚀 OPTIONAL (BEST PRACTICE)
 
 Also add:
