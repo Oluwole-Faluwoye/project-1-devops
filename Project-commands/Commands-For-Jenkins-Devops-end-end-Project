@@ -98,9 +98,16 @@ Create:
 
 Name: jenkins-token
 
-Type : User Token
+Type : User Token    ( If you do not choose this, you will not have the right permission)
 
 Copy The Token 
+
+Note we used Jenkins Sonar Scanner installed on Jenkins UI for the sonarqube scan this will help us with 
+
+✔ Authorization issue ✅
+✔ Scanner execution ✅
+✔ report-task.txt issue ✅
+✔ Quality Gate reliability ✅
 
 
 

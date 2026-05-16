@@ -8,6 +8,12 @@ pipeline {
 
   stages {
 
+    stage('Checkout') {
+      steps {
+        git 'https://github.com/Oluwole-Faluwoye/project-1-devops.git'
+      }
+    }
+
     stage('Debug Path') {
       steps {
         sh '''
@@ -18,27 +24,25 @@ pipeline {
     }
 
     stage('Build App') {
-  steps {
-    dir('app') {
-      sh 'npm install'
+      steps {
+        dir('app') {
+          sh '''
+          npm install
+          '''
+        }
+      }
     }
-  }
-}
 
     stage('SonarQube Scan') {
       steps {
         withSonarQubeEnv('sonarqube') {
-          withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-            sh '''
-            docker run --rm \
-              -v $(pwd):/usr/src \
-              -w /usr/src \
-              sonarsource/sonar-scanner-cli \
+          script {
+            def scannerHome = tool 'sonar-scanner'
+            sh """
+            ${scannerHome}/bin/sonar-scanner \
               -Dsonar.projectKey=my-app \
-              -Dsonar.sources=app \
-              -Dsonar.host.url=$SONAR_HOST_URL \
-              -Dsonar.login=$SONAR_TOKEN
-            '''
+              -Dsonar.sources=app
+            """
           }
         }
       }
@@ -76,6 +80,8 @@ pipeline {
     stage('Push to ECR') {
       steps {
         sh '''
+        set -e
+
         aws ecr get-login-password --region $AWS_REGION \
         | docker login --username AWS --password-stdin $ECR_REPO
 
@@ -103,5 +109,14 @@ pipeline {
       }
     }
 
+  }
+
+  post {
+    success {
+      echo "✅ Pipeline completed successfully!"
+    }
+    failure {
+      echo "❌ Pipeline failed. Check logs."
+    }
   }
 }
