@@ -14,10 +14,12 @@ pipeline {
       }
     }
 
-    stage('Debug Path') {
+    stage('Debug Workspace') {
       steps {
         sh '''
+          echo "Current directory:"
           pwd
+          echo "Workspace content:"
           ls -R
         '''
       }
@@ -26,11 +28,11 @@ pipeline {
     stage('Build App') {
       steps {
         sh '''
-          docker run --rm \
-            -v $(pwd)/app:/app \
-            -w /app \
-            node:18 \
-            npm install
+        docker run --rm \
+          -v ${WORKSPACE}/app:/app \
+          -w /app \
+          node:18 \
+          npm install
         '''
       }
     }
@@ -101,7 +103,7 @@ pipeline {
 
           docker run --rm \
             -v $HOME/.kube:/root/.kube \
-            -v $(pwd):/workspace \
+            -v ${WORKSPACE}:/workspace \
             -w /workspace \
             alpine/helm:3.12.0 \
             upgrade --install my-app ./helm/my-app \
