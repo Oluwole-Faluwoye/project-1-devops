@@ -651,6 +651,8 @@ docker rm jenkins
 
 ----------------------------------------------------------------------------
 
+Because Node was installed previously on the EC2 instance, and Jenkins inside container, we were having issues  (YOU NEED NODE IN JENKINS)
+
 SSH into Jenkins machine 
 
 WHAT YOU SHOULD DO (SAFE + CORRECT)
@@ -694,20 +696,20 @@ exit
 
 sudo chmod 666 /var/run/docker.sock
 
-------------------------------------------------------------------------
-Because Node was installed previously on the EC2 instance, and Jenkins inside container, we were having issues  (YOU NEED NODE IN JENKINS)
 
-Run these commands on Jenkins instance 
+WHY THIS IS REQUIRED
 
-docker exec -u 0 -it jenkins bash
+Your pipeline uses:
 
-apt update
+✔ docker run node:18
+✔ docker build
+✔ docker push
+✔ trivy container
+✔ helm container
 
-apt install -y nodejs npm
-
-exit
+👉 So Jenkins must act like a Docker client
 -------------------------------------------------------------------------------------------
-YET TO TEST 
+YET TO Try  This
 --------------------------------------------------------
 
 OPTION 2 (BETTER LONG TERM) — Build custom Jenkins image
