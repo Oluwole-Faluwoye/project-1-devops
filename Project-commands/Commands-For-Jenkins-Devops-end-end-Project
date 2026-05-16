@@ -534,7 +534,37 @@ SonarQube → Jenkins (internal VPC)
 
 -----------------------------------------------------------------
 
+Step 1 — Create .gitattributes
 
+In your project root:
+
+touch .gitattributes
+
+(This creates .gitattributes file)
+
+
+✅ Step 2 — Add this inside the file 
+
+* text=auto
+
+
+🎯 Optional (better control)
+
+*.sh text eol=lf
+*.tf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+👉 This ensures:
+
+Linux-compatible scripts
+No pipeline surprises
+
+ensure the name you used to store your jenkinsfile is what you used in the Jenkins UI 
+
+Note : It's case sensitive 
+
+--------------------------------------------------------------------
 PHASE 8 — RUN PIPELINE
 
 Click:
