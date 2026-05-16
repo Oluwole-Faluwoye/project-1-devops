@@ -1,0 +1,5 @@
+image:
+  repository: REPLACE_ME
+  tag: latest
+
+replicaCount: 2

@@ -1,0 +1,235 @@
+Option 1 boostraping the setup script into the Jenkins server when running terraform apply
+
+If you’re using VS Code:
+Open the folder containing main.tf   i.e the terraform folder 
+
+Open the folder in integrated terminal 
+
+Run:
+chmod +x setup.sh
+
+
+( NOTE: WE ARE NOT INSTALLING MAVEN BECAUSE OUR APP CODE ISN'T JAVA AND WE DO NOT HAVE pom.xml file in our app code)
+
+
+Note the setup.sh script is in thesame folder with main.tf and referenced in main.tf under Jenkins EC2 resource as the useedata
+
+
+then run: 
+
+terraform init 
+
+terraform plan 
+
+terraform apply
+
+
+Update both the Kubectl files of both your local machine and your jenkins machine with this.  ( i.e paste these commands on both machines)
+
+Then test immediately : 
+
+aws eks update-kubeconfig \
+  --region us-east-1 \
+  --name devops-cluster
+
+
+
+Step 3 — Test cluster access
+
+kubectl get nodes
+
+------------------------------------------------------------------
+ to get your jenkins password 
+
+ run this command : docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+
+------------------------------------------------------------------------------
+
+Set up your Sonarqube
+
+Create project manually 
+
+Go to SonarQube:
+
+http://<EC2-IP>:9000
+👉 Click:
+Top right → My Account → Security
+Create token:
+Name: jenkins-token
+Click Generate
+COPY IT ⚠️
+---------------------------------------------------------------------------------
+STEP 1 — Jenkins Credentials (production best practice)
+
+Go to:
+
+Jenkins → Manage Jenkins → Credentials → Global
+
+✅ 1. SonarQube token
+Type: Secret Text
+ID: sonar-token
+Value: (your Sonar token)
+❗ 2. AWS credentials?
+
+👉 DO NOT ADD ANY
+
+You already did the correct thing:
+
+EC2 IAM ROLE → provides AWS access ✅
+
+This is production best practice.
+
+⚙️ STEP 2 — Configure SonarQube in Jenkins
+
+Go to:
+
+Manage Jenkins → System
+
+Add:
+
+Name: sonarqube
+URL: http://<EC2-IP>:9000
+Credentials: sonar-token
+🧪 STEP 3 — SonarQube Quality Gate
+
+Go to SonarQube:
+
+http://<EC2-IP>:9000
+Create Quality Gate
+
+Quality Gates → Create
+
+Add rules:
+
+Bugs > 0 → FAIL
+Vulnerabilities > 0 → FAIL
+Coverage < 70% → FAIL
+
+👉 Set as default
+
+📦 STEP 4 — Prepare your app repo
+
+Your app is already good 👍
+
+Just ensure:
+
+Dockerfile
+FROM node:18
+
+WORKDIR /app
+COPY . .
+RUN npm install
+
+EXPOSE 3000
+CMD ["node", "index.js"]
+🧠 STEP 5 — Get your ECR URL
+terraform output ecr_repo_url
+
+Example:
+
+761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo
+🚀 STEP 6 — Create Jenkins Pipeline Job
+New Item → Pipeline
+Name: devops-final
+
+
+
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------
+
+EXPLAINING OUR DOCKERFILE 
+
+Smaller image
+node:18-alpine
+
+👉 Much lighter → faster pull → faster deploy on EKS
+
+✅ 2. Faster builds (very important)
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+
+👉 Docker caches dependencies
+👉 No reinstall unless package.json changes
+
+✅ 3. Production install
+npm install --production
+
+👉 Skips dev dependencies → smaller + safer
+
+END OF DOCKERFILE EXPLANATION
+------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Option 2
+
+Here you will remove  userdata reference from the Jenkins EC2 resource inside main.tf 
+
+1. Bootstrap Script
+
+Create a file:
+
+nano setup.sh
+
+Paste the content of setup.sh into the file created
+
+2. How to run it
+Step 1 — Make executable
+chmod +x setup.sh
+
+Step 2 — Run script
+./setup.sh
+Step 3 — Reconnect (VERY IMPORTANT)
+
+After it finishes:
+
+exit
+
+SSH back in again so Docker permissions apply.
+
+🌐 3. Access your tools
+Jenkins
+http://<your-ec2-ip>:8080
+SonarQube
+http://<your-ec2-ip>:9000
+
+Login:
+
+admin / admin
+
+🧠 What this script sets up (clean architecture)
+
+Tool	How it runs
+
+Jenkins	Docker container
+SonarQube	Docker container
+Trivy	Run in pipeline (container)
+Helm	Run in pipeline (container)
+kubectl	Installed
+AWS CLI	Installed
+
+🔥 Why this is the right approach :
+
+No messy installs
+Everything reproducible
+Easy to destroy + rebuild
+Matches real DevOps workflows
