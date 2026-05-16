@@ -3,7 +3,7 @@ pipeline {
 
   environment {
     AWS_REGION = "us-east-1"
-    ECR_REPO = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
+    ECR_REPO   = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
   }
 
   stages {
@@ -17,8 +17,8 @@ pipeline {
     stage('Debug Path') {
       steps {
         sh '''
-        pwd
-        ls -R
+          pwd
+          ls -R
         '''
       }
     }
@@ -27,7 +27,7 @@ pipeline {
       steps {
         dir('app') {
           sh '''
-          npm install
+            npm install
           '''
         }
       }
@@ -39,9 +39,9 @@ pipeline {
           script {
             def scannerHome = tool 'sonar-scanner'
             sh """
-            ${scannerHome}/bin/sonar-scanner \
-              -Dsonar.projectKey=my-app \
-              -Dsonar.sources=app
+              ${scannerHome}/bin/sonar-scanner \
+                -Dsonar.projectKey=my-app \
+                -Dsonar.sources=app
             """
           }
         }
@@ -59,7 +59,7 @@ pipeline {
     stage('Docker Build') {
       steps {
         sh '''
-        docker build -t my-app:latest ./app
+          docker build -t my-app:latest ./app
         '''
       }
     }
@@ -67,12 +67,13 @@ pipeline {
     stage('Trivy Scan') {
       steps {
         sh '''
-        docker run --rm \
-          -v /var/run/docker.sock:/var/run/docker.sock \
-          aquasec/trivy image \
-          --exit-code 1 \
-          --severity HIGH,CRITICAL \
-          my-app:latest
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $HOME/.cache/trivy:/root/.cache/trivy \
+            aquasec/trivy image \
+            --exit-code 1 \
+            --severity HIGH,CRITICAL \
+            my-app:latest
         '''
       }
     }
@@ -80,13 +81,13 @@ pipeline {
     stage('Push to ECR') {
       steps {
         sh '''
-        set -e
+          set -e
 
-        aws ecr get-login-password --region $AWS_REGION \
-        | docker login --username AWS --password-stdin $ECR_REPO
+          aws ecr get-login-password --region $AWS_REGION \
+          | docker login --username AWS --password-stdin $ECR_REPO
 
-        docker tag my-app:latest $ECR_REPO:latest
-        docker push $ECR_REPO:latest
+          docker tag my-app:latest $ECR_REPO:latest
+          docker push $ECR_REPO:latest
         '''
       }
     }
@@ -94,17 +95,17 @@ pipeline {
     stage('Deploy to EKS (Helm)') {
       steps {
         sh '''
-        aws eks update-kubeconfig --region $AWS_REGION --name devops-cluster
+          aws eks update-kubeconfig --region $AWS_REGION --name devops-cluster
 
-        docker run --rm \
-          -v $HOME/.kube:/root/.kube \
-          -v /home/ec2-user/.aws:/root/.aws \
-          -v $(pwd):/workspace \
-          -w /workspace \
-          alpine/helm:3.14.0 \
-          upgrade --install my-app ./helm/my-app \
-          --set image.repository=$ECR_REPO \
-          --set image.tag=latest
+          docker run --rm \
+            -v $HOME/.kube:/root/.kube \
+            -v /home/ec2-user/.aws:/root/.aws \
+            -v $(pwd):/workspace \
+            -w /workspace \
+            alpine/helm:3.14.0 \
+            upgrade --install my-app ./helm/my-app \
+            --set image.repository=$ECR_REPO \
+            --set image.tag=latest
         '''
       }
     }

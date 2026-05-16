@@ -451,7 +451,33 @@ Script Path → Jenkinsfile
 
 ----------------------------------------------------
 
+VERY IMPORTANT   ENSURE THE HOST EC2 FOR JENKINS IS ABOUT 20-30GB 
 
+To ensure your Tivy scan uses only a small space update the Trivy scan stage to this 
+
+stage('Trivy Scan') {
+  steps {
+    sh '''
+    docker run --rm \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v $HOME/.cache/trivy:/root/.cache/trivy \
+      aquasec/trivy image \
+      --exit-code 1 \
+      --severity HIGH,CRITICAL \
+      my-app:latest
+    '''
+  }
+}
+
+
+-----------------------------------------------------------------
+
+✔ Cache stored on host → not inside container
+✔ DB downloaded once → reused
+✔ Saves disk + time
+✔ Prevents repeated failures
+
+--------------------------------------------------------------
 
 PART 4 — VERIFY EVERYTHING
 Test SonarQube → Jenkins
