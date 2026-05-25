@@ -2,17 +2,22 @@ FROM jenkins/jenkins:lts
 
 USER root
 
+# Install required packages
 RUN apt-get update && apt-get install -y \
     docker.io \
     git \
     curl \
-    unzip
+    unzip \
+    awscli
 
 # Install Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs
 
-# Install AWS CLI
-RUN apt-get install -y awscli
+# Match Docker group ID with EC2 host
+RUN groupmod -g 992 docker
+
+# Add Jenkins user to Docker group
+RUN usermod -aG docker jenkins
 
 USER jenkins

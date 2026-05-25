@@ -1,7 +1,8 @@
 # Terraform
-.terraform/
-*.tfstate
 *.tfstate.*
+*.tfstate
+*.tfstate.backup
+.terraform/
 crash.log
 
 # Node
