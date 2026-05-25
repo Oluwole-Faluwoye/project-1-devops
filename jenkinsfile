@@ -1,126 +1,147 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    AWS_REGION = "us-east-1"
-    ECR_REPO   = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
-  }
-
-  stages {
-
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    options {
+        timestamps()
+        ansiColor('xterm')
     }
 
-    stage('Debug Workspace') {
-      steps {
-        sh '''
-          echo "Current directory:"
-          pwd
-          echo "Workspace content:"
-          ls -R
-        '''
-      }
+    environment {
+        AWS_REGION    = "us-east-1"
+        ECR_REPO      = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
+        IMAGE_TAG     = "${BUILD_NUMBER}"
+        IMAGE_NAME    = "my-app:${BUILD_NUMBER}"
+        DEPLOY_TO_EKS = "false"
     }
 
-    stage('Build App') {
-      steps {
-        sh '''
-        docker run --rm \
-          -v /var/lib/docker/volumes/jenkins_home/_data/workspace/Devops-1-Project/app:/app \
-          -w /app \
-          node:18 \
-          npm install
-        '''
-      }
-    }
+    stages {
 
-    stage('SonarQube Scan') {
-      steps {
-        withSonarQubeEnv('sonarqube') {
-          script {
-            def scannerHome = tool 'sonar-scanner'
-            sh """
-              ${scannerHome}/bin/sonar-scanner \
-                -Dsonar.projectKey=my-app \
-                -Dsonar.sources=app
-            """
-          }
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
-    }
 
-    stage('Quality Gate') {
-      steps {
-        timeout(time: 2, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: true
+        stage('Build App') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v /var/lib/docker/volumes/jenkins_home/_data/workspace/Devops-1-Project:/workspace \
+                      -w /workspace/app \
+                      node:18 \
+                      npm install
+                '''
+            }
         }
-      }
+
+        stage('SonarQube Scan') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    script {
+
+                        def scannerHome = tool 'sonar-scanner'
+
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                              -Dsonar.projectKey=my-app \
+                              -Dsonar.sources=app
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh '''
+                    docker build -t $IMAGE_NAME ./app
+                '''
+            }
+        }
+
+        stage('Security Scan (Trivy)') {
+            steps {
+                sh '''
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      aquasec/trivy image \
+                      --exit-code 1 \
+                      --severity CRITICAL \
+                      $IMAGE_NAME
+                '''
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                    set -e
+
+                    aws ecr get-login-password --region $AWS_REGION \
+                    | docker login --username AWS --password-stdin $ECR_REPO
+
+                    docker tag $IMAGE_NAME $ECR_REPO:$IMAGE_TAG
+                    docker tag $IMAGE_NAME $ECR_REPO:latest
+
+                    docker push $ECR_REPO:$IMAGE_TAG
+                    docker push $ECR_REPO:latest
+                '''
+            }
+        }
+
+        stage('Deploy to EKS (Helm)') {
+
+            when {
+                expression {
+                    return env.DEPLOY_TO_EKS == 'true'
+                }
+            }
+
+            steps {
+                sh '''
+                    aws eks update-kubeconfig \
+                      --region $AWS_REGION \
+                      --name devops-cluster
+
+                    docker run --rm \
+                      -v $HOME/.kube:/root/.kube \
+                      -v /var/lib/docker/volumes/jenkins_home/_data/workspace/Devops-1-Project:/workspace \
+                      -w /workspace \
+                      alpine/helm:3.12.0 \
+                      upgrade --install my-app ./helm/my-app \
+                      --set image.repository=$ECR_REPO \
+                      --set image.tag=$IMAGE_TAG
+                '''
+            }
+        }
+
+        stage('Docker Cleanup') {
+            steps {
+                sh 'docker system prune -af || true'
+            }
+        }
     }
 
-    stage('Docker Build') {
-      steps {
-        sh '''
-          docker build -t my-app:latest ./app
-        '''
-      }
+    post {
+
+        success {
+            echo "✅ Build ${BUILD_NUMBER} deployed successfully"
+        }
+
+        failure {
+            echo "❌ Build failed — investigate logs"
+        }
+
+        always {
+            cleanWs()
+        }
     }
-
-    stage('Trivy Scan') {
-      steps {
-        sh '''
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v $HOME/.cache/trivy:/root/.cache/trivy \
-            aquasec/trivy image \
-            --exit-code 0 \
-            --severity HIGH,CRITICAL \
-            my-app:latest
-        '''
-      }
-    }
-
-    stage('Push to ECR') {
-      steps {
-        sh '''
-          set -e
-
-          aws ecr get-login-password --region $AWS_REGION \
-          | docker login --username AWS --password-stdin $ECR_REPO
-
-          docker tag my-app:latest $ECR_REPO:latest
-          docker push $ECR_REPO:latest
-        '''
-      }
-    }
-
-    stage('Deploy to EKS (Helm)') {
-      steps {
-        sh '''
-          aws eks update-kubeconfig --region $AWS_REGION --name devops-cluster
-
-          docker run --rm \
-            -v $HOME/.kube:/root/.kube \
-            -v ${WORKSPACE}:/workspace \
-            -w /workspace \
-            alpine/helm:3.12.0 \
-            upgrade --install my-app ./helm/my-app \
-            --set image.repository=$ECR_REPO \
-            --set image.tag=latest
-        '''
-      }
-    }
-
-  }
-
-  post {
-    success {
-      echo "✅ Pipeline completed successfully!"
-    }
-    failure {
-      echo "❌ Pipeline failed. Check logs."
-    }
-  }
 }
