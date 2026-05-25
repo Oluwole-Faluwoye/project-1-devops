@@ -1,4 +1,5 @@
 pipeline {
+
     agent any
 
     options {
@@ -6,68 +7,134 @@ pipeline {
     }
 
     environment {
+
         AWS_REGION    = "us-east-1"
+
         ECR_REPO      = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
+
         IMAGE_TAG     = "${BUILD_NUMBER}"
+
         IMAGE_NAME    = "my-app:${BUILD_NUMBER}"
+
         DEPLOY_TO_EKS = "false"
     }
 
     stages {
 
+        #######################################################
+        # CHECKOUT
+        #######################################################
+
         stage('Checkout') {
+
             steps {
+
                 checkout scm
             }
         }
 
-        stage('Build App') {
+        #######################################################
+        # DEBUG WORKSPACE
+        #######################################################
+
+        stage('Debug Workspace') {
+
             steps {
+
                 sh '''
-                    docker run --rm \
-                      -v /var/lib/docker/volumes/jenkins_home/_data/workspace/Devops-1-Project:/workspace \
-                      -w /workspace/app \
-                      node:18 \
-                      npm install
+                    echo "Current directory:"
+                    pwd
+
+                    echo "Workspace contents:"
+                    ls -R
                 '''
             }
         }
 
-        stage('SonarQube Scan') {
+        #######################################################
+        # BUILD NODE APPLICATION
+        #######################################################
+
+        stage('Build App') {
+
             steps {
-                withSonarQubeEnv('sonarqube') {
-                    script {
 
-                        def scannerHome = tool 'sonar-scanner'
+                dir('app') {
 
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                              -Dsonar.projectKey=my-app \
-                              -Dsonar.sources=app
-                        """
+                    sh '''
+                        npm install
+                    '''
+                }
+            }
+        }
+
+        #######################################################
+        # SONARQUBE SCAN
+        #######################################################
+
+        stage('SonarQube Scan') {
+
+            steps {
+
+                dir('app') {
+
+                    withSonarQubeEnv('sonarqube') {
+
+                        script {
+
+                            def scannerHome = tool 'sonar-scanner'
+
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner \
+                                  -Dsonar.projectKey=my-app \
+                                  -Dsonar.sources=.
+                            """
+                        }
                     }
                 }
             }
         }
 
+        #######################################################
+        # QUALITY GATE
+        #######################################################
+
         stage('Quality Gate') {
+
             steps {
+
                 timeout(time: 5, unit: 'MINUTES') {
+
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
+        #######################################################
+        # DOCKER BUILD
+        #######################################################
+
         stage('Docker Build') {
+
             steps {
-                sh '''
-                    docker build -t $IMAGE_NAME ./app
-                '''
+
+                dir('app') {
+
+                    sh '''
+                        docker build -t $IMAGE_NAME .
+                    '''
+                }
             }
         }
 
+        #######################################################
+        # TRIVY SECURITY SCAN
+        #######################################################
+
         stage('Security Scan (Trivy)') {
+
             steps {
+
                 sh '''
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
@@ -79,67 +146,93 @@ pipeline {
             }
         }
 
+        #######################################################
+        # PUSH IMAGE TO ECR
+        #######################################################
+
         stage('Push to ECR') {
+
             steps {
+
                 sh '''
                     set -e
 
                     aws ecr get-login-password --region $AWS_REGION \
-                    | docker login --username AWS --password-stdin $ECR_REPO
+                    | docker login \
+                    --username AWS \
+                    --password-stdin $ECR_REPO
 
                     docker tag $IMAGE_NAME $ECR_REPO:$IMAGE_TAG
+
                     docker tag $IMAGE_NAME $ECR_REPO:latest
 
                     docker push $ECR_REPO:$IMAGE_TAG
+
                     docker push $ECR_REPO:latest
                 '''
             }
         }
 
+        #######################################################
+        # OPTIONAL EKS DEPLOYMENT
+        #######################################################
+
         stage('Deploy to EKS (Helm)') {
 
             when {
+
                 expression {
                     return env.DEPLOY_TO_EKS == 'true'
                 }
             }
 
             steps {
+
                 sh '''
                     aws eks update-kubeconfig \
                       --region $AWS_REGION \
                       --name devops-cluster
 
-                    docker run --rm \
-                      -v $HOME/.kube:/root/.kube \
-                      -v /var/lib/docker/volumes/jenkins_home/_data/workspace/Devops-1-Project:/workspace \
-                      -w /workspace \
-                      alpine/helm:3.12.0 \
-                      upgrade --install my-app ./helm/my-app \
+                    helm upgrade --install my-app ./helm/my-app \
                       --set image.repository=$ECR_REPO \
                       --set image.tag=$IMAGE_TAG
                 '''
             }
         }
 
+        #######################################################
+        # CLEANUP
+        #######################################################
+
         stage('Docker Cleanup') {
+
             steps {
-                sh 'docker system prune -af || true'
+
+                sh '''
+                    docker system prune -af || true
+                '''
             }
         }
     }
 
+    ###########################################################
+    # POST ACTIONS
+    ###########################################################
+
     post {
 
         success {
+
             echo "✅ Build ${BUILD_NUMBER} deployed successfully"
         }
 
         failure {
+
             echo "❌ Build failed — investigate logs"
         }
 
         always {
+
             cleanWs()
         }
     }

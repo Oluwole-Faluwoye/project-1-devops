@@ -715,6 +715,19 @@ my-app-pipeline
 
 ---
 
+Inside pipeline job config:
+
+Under:
+
+Pipeline
+→ Additional Behaviors
+
+Add:
+
+Clean before checkout
+
+VERY important.
+
 # Step 36 — Configure GitHub Repository
 
 Under:
