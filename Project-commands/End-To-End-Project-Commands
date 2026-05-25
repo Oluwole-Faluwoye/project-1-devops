@@ -498,7 +498,7 @@ Add:
 | Field                       | Value                                                |
 | --------------------------- | ---------------------------------------------------- |
 | Name                        | sonarqube                                            |
-| Server URL                  | [http:<Jenkins_Public_IP>:9000]                      |
+| Server URL                  | [http://<Jenkins_Public_IP>:9000]                      |
 | Server authentication token | sonar-token                                          |
 
 Check:
@@ -614,6 +614,45 @@ Verify installed:
 * Pipeline
 
 ---
+
+
+ADD QUALITY GATE TO SONARQUBE PROJECT
+
+Inside project:
+
+Go to:
+
+Project Settings
+→ Quality Gate
+
+Choose:
+
+Sonar way
+
+OR create custom gate.
+
+🚀 STEP 8 — CREATE CUSTOM QUALITY GATE (OPTIONAL)
+
+Go to:
+
+Administration
+→ Quality Gates
+
+Create:
+
+Production-Gate
+
+Add conditions like:
+
+Metric	Condition
+Bugs	> 0
+Vulnerabilities	> 0
+Code Smells	> 10
+Coverage	< 80%
+Duplications	> 5%
+
+Then assign project to this gate.
+
 
 # Step 32 — Verify Jenkinsfile Quality Gate Stage
 
