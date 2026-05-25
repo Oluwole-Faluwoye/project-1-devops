@@ -1,0 +1,114 @@
+We are building and pushing the main Image for Jenkins container on an EC2 instance because i dont want to install docker locally. (Disk Space Issue) 
+
+STEP 1 — Spin Up a Temporary Build EC2
+
+Use Terraform (or console if you want speed for now)
+
+Minimum spec:
+Instance: t3.medium (or t3.large if faster builds needed)
+Storage: 30–50GB (important)
+OS: Amazon Linux 2 or Ubuntu
+🔐 Attach IAM Role (IMPORTANT)
+
+Attach policy:
+
+AmazonEC2ContainerRegistryFullAccess
+
+👉 This avoids login headaches later.
+
+🚀 STEP 2 — SSH into Instance
+ssh -i your-key.pem ec2-user@<public-ip>
+🚀 STEP 3 — Install Docker on the Instance
+
+For Amazon Linux:
+
+sudo yum update -y
+sudo amazon-linux-extras install docker -y
+sudo service docker start
+sudo usermod -aG docker ec2-user
+
+Then:
+
+exit
+
+SSH back in (so group applies)
+
+🔍 Verify
+docker --version
+docker run hello-world
+🚀 STEP 4 — Copy Your Dockerfile to EC2
+
+From your local machine:
+
+scp -i your-key.pem Dockerfile ec2-user@<public-ip>:/home/ec2-user/
+
+mine :   scp -i ~/Downloads/us-east-1-key.pem dockerfile ec2-user@<public-ip>:/home/ec2-user/
+dockerfile 
+
+If you have more files:
+
+scp -i your-key.pem -r . ec2-user@<public-ip>:/home/ec2-user/
+
+🚀 STEP 5 — Build Image on EC2
+
+docker build -t jenkins-custom .
+
+🚀 STEP 6 — Create Repo in Amazon ECR
+
+aws ecr create-repository \
+  --repository-name jenkins \
+  --region us-east-1
+
+  OR configure your AWS user on the instance 
+
+ 
+🚀 STEP 7 — Login to ECR
+aws ecr get-login-password --region us-east-1 \
+| docker login \
+--username AWS \
+--password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+
+The <account-id> should be your account id
+
+
+🚀 STEP 8 — Tag Image
+
+docker tag jenkins-custom:latest \
+<account-id>.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
+
+
+
+🚀 STEP 9 — Push Image
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
+
+
+
+💣 STEP 10 — Destroy the Build Instance
+
+👉 This is the part most people don’t do — and waste money.
+
+After push is complete:
+
+exit
+
+Then:
+
+Terminate EC2
+
+✔ Image is safe in ECR
+✔ No more compute cost
+
+Immediate Action You SHOULD take
+
+Add lifecycle policy (VERY important in Prod):
+
+Keep only last 2–3 images.
+
+🧠 What This Means for You
+
+Right now:
+
+✔ Cost → negligible
+✔ Performance → acceptable
+❗ Efficiency → can improve

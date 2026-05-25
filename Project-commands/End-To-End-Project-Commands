@@ -1,0 +1,939 @@
+# Complete DevOps Platform Setup Runbook
+
+# Overview
+
+This document covers the FULL setup process for:
+
+* Terraform modular infrastructure
+* Jenkins EC2 provisioning
+* Custom Jenkins Docker image
+* SonarQube integration
+* GitHub integration
+* ECR integration
+* Quality Gates
+* Webhooks
+* Trivy security scanning
+* Optional EKS deployment
+
+This guide is written step-by-step for future reuse.
+
+---
+
+# PHASE 1 — BUILD CUSTOM JENKINS IMAGE
+
+# Step 1 — Create Jenkins Dockerfile
+
+Create a file named:
+
+```text
+Dockerfile
+```
+
+Add:
+
+```dockerfile
+FROM jenkins/jenkins:lts
+
+USER root
+
+RUN apt-get update && apt-get install -y \
+    docker.io \
+    git \
+    curl \
+    unzip
+
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+RUN apt-get install -y awscli
+
+USER jenkins
+```
+
+---
+
+# Step 2 — Build Jenkins Image
+
+SSH into your temporary build EC2 instance.
+
+Run:
+
+```bash
+docker build -t jenkins-custom .
+```
+
+---
+
+# Step 3 — Create ECR Repository for Jenkins
+
+Run:
+
+```bash
+aws ecr create-repository --repository-name jenkins --region us-east-1
+```
+
+---
+
+# Step 4 — Login to ECR
+
+Run:
+
+```bash
+aws ecr get-login-password --region us-east-1 \
+| docker login \
+--username AWS \
+--password-stdin 761018849945.dkr.ecr.us-east-1.amazonaws.com
+```
+
+---
+
+# Step 5 — Tag Jenkins Image
+
+Run:
+
+```bash
+docker tag jenkins-custom:latest \
+761018849945.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
+```
+
+---
+
+# Step 6 — Push Jenkins Image
+
+Run:
+
+```bash
+docker push 761018849945.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
+```
+
+---
+
+# PHASE 2 — TERRAFORM STRUCTURE
+
+# Step 7 — Create Terraform Structure
+
+```text
+terraform/
+├── modules/
+│   ├── ecr/
+│   ├── eks/
+│   ├── jenkins/
+│   └── vpc/
+│
+├── envs/
+│   └── dev/
+│       ├── main.tf
+│       ├── providers.tf
+│       ├── variables.tf
+│       ├── terraform.tfvars
+│       ├── outputs.tf
+│       └── setup.sh
+```
+
+---
+
+# Step 8 — Navigate to Dev Environment
+
+Run:
+
+```bash
+cd terraform/envs/dev
+```
+
+---
+
+# Step 9 — Initialize Terraform
+
+Run:
+
+```bash
+terraform init
+```
+
+---
+
+# Step 10 — Import Existing Jenkins ECR Repo
+
+IMPORTANT:
+
+Because the Jenkins ECR repository already exists manually.
+
+Run:
+
+```bash
+terraform import module.jenkins_ecr.aws_ecr_repository.repo jenkins
+```
+
+---
+
+# Step 11 — Import App ECR Repo (if already exists)
+
+Run:
+
+```bash
+terraform import module.app_ecr.aws_ecr_repository.repo my-app-repo
+```
+
+---
+
+# Step 12 — Validate Terraform
+
+Run:
+
+```bash
+terraform validate
+```
+
+---
+
+# Step 13 — Review Plan
+
+Run:
+
+```bash
+terraform plan
+```
+
+Verify:
+
+* VPC will be created
+* Jenkins EC2 will be created
+* ECR repos exist
+* EKS will NOT be created
+
+because:
+
+```hcl
+enable_eks = false
+```
+
+---
+
+# Step 14 — Apply Infrastructure
+
+Run:
+
+```bash
+terraform apply
+```
+
+Type:
+
+```text
+yes
+```
+
+---
+
+# PHASE 3 — VERIFY INFRASTRUCTURE
+
+# Step 15 — Check Terraform Outputs
+
+Run:
+
+```bash
+terraform output
+```
+
+Example:
+
+```text
+app_ecr_repo = "761018849945.dkr.ecr.us-east-1.amazonaws.com/my-app-repo"
+jenkins_ip = "--.--.--.--"
+```
+
+---
+
+# Step 16 — SSH into Jenkins EC2
+
+Run:
+
+```bash
+ssh -i /path/to/us-east-1-key.pem ec2-user@54.226.98.49
+```
+
+---
+
+# Step 17 — Verify Containers
+
+Run:
+
+```bash
+docker ps -a
+```
+
+Verify:
+
+* Jenkins container running
+* SonarQube container running
+
+---
+
+# Step 18 — Verify Node.js Inside Jenkins
+
+Run:
+
+```bash
+docker exec -it jenkins node -v
+```
+
+---
+
+# Step 19 — Verify AWS CLI Inside Jenkins
+
+Run:
+
+```bash
+docker exec -it jenkins aws --version
+```
+
+---
+
+# Step 20 — Open Jenkins UI
+
+Browser:
+
+```text
+http://<Jenkins_Public_IP>:8080
+```
+
+---
+
+# Step 21 — Get Jenkins Initial Password
+
+Run:
+
+```bash
+docker logs jenkins
+```
+
+Find:
+
+```text
+Please use the following password
+```
+
+Copy password.
+
+---
+
+# Step 22 — Install Suggested Plugins
+
+In Jenkins:
+
+Click:
+
+```text
+Install Suggested Plugins
+```
+
+Wait for installation to finish.
+
+---
+
+Install specific plugins for your project.
+
+CORE REQUIRED PLUGINS
+| Plugin              | Why YOU Need It               |
+| ------------------- | ----------------------------- |
+| Pipeline            | Runs your Jenkinsfile         |
+| Git                 | Pulls code from GitHub        |
+| GitHub              | GitHub webhook integration    |
+| Docker Pipeline     | Docker builds/scans/push      |
+| SonarQube Scanner   | SonarQube + Quality Gate      |
+| Credentials Binding | Store GitHub/Sonar secrets    |
+| SSH Agent           | Future SSH deployments        |
+| Workspace Cleanup   | Cleans workspace after builds |
+| Timestamper         | Better logs/debugging         |
+| ANSI Color          | Colored console logs          |
+| Blue Ocean          | Better pipeline visualization |
+| Kubernetes CLI      | kubectl support for EKS       |
+
+
+🚀 QUALITY GATE RELATED
+Plugin	Purpose
+SonarQube Scanner	waitForQualityGate support
+
+# Step 23 — Create Jenkins Admin User
+
+Create:
+
+* Username
+* Password
+* Email
+
+Save credentials.
+
+---
+
+# PHASE 4 — SONARQUBE SETUP
+
+# Step 24 — Open SonarQube
+
+Browser:
+
+```text
+http://<Jenkins_EC2_Public_Ip>:9000
+```
+ The reason why we used the <Jenkins_EC2_Public_Ip> is because, the Sonarqube docker container is inside the Jenkins EC2
+
+Default:
+
+```text
+admin
+admin
+```
+
+You will be asked to change password.
+
+---
+
+# Step 25 — Generate SonarQube Token
+
+In SonarQube:
+
+Go to:
+
+```text
+My Account
+→ Security
+→ Generate Tokens
+```
+
+Create:
+
+```text
+jenkins-token
+```
+Type
+
+User Token 
+
+Copy token immediately.
+
+IMPORTANT:
+
+You cannot see it again later.
+
+---
+
+# Step 26 — Create SonarQube Project
+
+In SonarQube:
+
+Click:
+
+```text
+Create Project
+```
+
+Choose:
+
+```text
+Locally
+```
+
+Project key:
+
+```text
+my-app
+```
+
+Display name:
+
+```text
+my-app
+```
+
+Use generated token.
+
+---
+
+# PHASE 5 — JENKINS + SONARQUBE INTEGRATION
+
+# Step 27 — Add SonarQube Token to Jenkins
+
+In Jenkins:
+
+Go to:
+
+```text
+Manage Jenkins
+→ Credentials
+→ System
+→ Global credentials
+→ Add Credentials
+```
+
+Choose:
+
+| Field       | Value             |
+| ----------- | ----------------- |
+| Kind        | Secret text       |
+| Secret      | paste sonar token |
+| ID          | sonar-token       |
+| Description | SonarQube Token   |
+
+Save.
+
+---
+
+# Step 28 — Configure SonarQube Server in Jenkins
+
+Go to:
+
+```text
+Manage Jenkins
+→ System
+```
+
+Find:
+
+```text
+SonarQube Servers
+```
+
+Add:
+
+| Field                       | Value                                                |
+| --------------------------- | ---------------------------------------------------- |
+| Name                        | sonarqube                                            |
+| Server URL                  | [http:<Jenkins_Public_IP>:9000]                      |
+| Server authentication token | sonar-token                                          |
+
+Check:
+
+```text
+Environment variables
+```
+
+Save.
+
+---
+
+# Step 29 — Install SonarQube Scanner Tool
+
+Go to:
+
+```text
+Manage Jenkins
+→ Tools
+```
+
+Find:
+
+```text
+SonarQube Scanner
+```
+
+Click:
+
+```text
+Add SonarQube Scanner
+```
+
+Name:
+
+```text
+sonar-scanner
+```
+
+Check:
+
+```text
+Install automatically
+```
+
+Save.
+
+IMPORTANT:
+
+Your Jenkinsfile expects:
+
+```groovy
+tool 'sonar-scanner'
+```
+
+---
+
+# PHASE 6 — QUALITY GATE
+
+# Step 30 — Configure SonarQube Webhook
+
+In SonarQube:
+
+Go to:
+
+```text
+Administration
+→ Configuration
+→ Webhooks
+```
+
+Click:
+
+```text
+Create
+```
+
+Add:
+
+| Field | Value                                                                                      |
+| ----- | ------------------------------------------------------------------------------------------ |
+| Name  | Jenkins                                                                                    |
+| URL   | [http:<Jenkins_EC2_Private_IP>:8080/sonarqube-webhook/] OR even better:
+
+http://jenkins:8080/sonarqube-webhook/  (Because in our setup.sh we create a docker network and both jenkins and sonarqube are both added to thesame docker network so they can call eachother just by name )
+
+Save.
+
+IMPORTANT:
+
+Webhook URL MUST end with:
+
+```text
+/sonarqube-webhook/
+```
+
+---
+
+# Step 31 — Install Quality Gate Plugins
+
+In Jenkins:
+
+Go to:
+
+```text
+Manage Jenkins
+→ Plugins
+```
+
+Verify installed:
+
+* SonarQube Scanner
+* Pipeline
+
+---
+
+# Step 32 — Verify Jenkinsfile Quality Gate Stage
+
+Verify Jenkinsfile contains:
+
+```groovy
+stage('Quality Gate') {
+    steps {
+        timeout(time: 5, unit: 'MINUTES') {
+            waitForQualityGate abortPipeline: true
+        }
+    }
+}
+```
+
+This makes Jenkins:
+
+* wait for Sonar analysis
+* fail build if quality gate fails
+
+---
+
+# PHASE 7 — GITHUB SETUP
+
+# Step 33 — Create GitHub Personal Access Token
+
+In GitHub:
+
+Go to:
+
+```text
+Settings
+→ Developer Settings
+→ Personal Access Tokens
+→ Tokens (classic)
+→ Generate new token
+```
+
+Enable:
+
+* repo
+* workflow
+* admin:repo_hook
+
+Generate token.
+
+Copy token immediately.
+
+---
+
+# Step 34 — Add GitHub Credentials to Jenkins
+
+In Jenkins:
+
+Go to:
+
+```text
+Manage Jenkins
+→ Credentials
+→ System
+→ Global credentials
+→ Add Credentials
+```
+
+Add:
+
+| Field    | Value                  |
+| -------- | ---------------------- |
+| Kind     | Username with password |
+| Username | GitHub username        |
+| Password | GitHub PAT token       |
+| ID       | github-creds           |
+
+Save.
+
+---
+
+# Step 35 — Create Jenkins Pipeline Job
+
+In Jenkins:
+
+Click:
+
+```text
+New Item
+```
+
+Choose:
+
+```text
+Pipeline
+```
+
+Name:
+
+```text
+my-app-pipeline
+```
+
+---
+
+# Step 36 — Configure GitHub Repository
+
+Under:
+
+```text
+Pipeline
+```
+
+Choose:
+
+```text
+Pipeline script from SCM
+```
+
+SCM:
+
+```text
+Git
+```
+
+Repository URL:
+
+```text
+https://github.com/YOUR_USERNAME/YOUR_REPO.git
+```
+
+Credentials:
+
+```text
+github-creds
+```
+
+Branch:
+
+```text
+*/main
+```
+
+Save.
+
+---
+
+# Step 37 — Configure GitHub Webhook
+
+In GitHub repo:
+
+Go to:
+
+```text
+Settings
+→ Webhooks
+→ Add webhook
+```
+
+Payload URL:
+
+```text
+http://<Jenkins_EC2_Public_IP>:8080/github-webhook/
+```
+
+we are using the Jenkins EC2 Public Ip because they are not in thesame VPC and Github would be accessed on the internet
+
+Content type:
+
+```text
+application/json
+```
+
+Choose:
+
+```text
+Just the push event
+```
+
+Save.
+
+---
+
+# Step 38 — Enable GitHub Hook Trigger in Jenkins
+
+In Jenkins Pipeline Job:
+
+Go to:
+
+```text
+Build Triggers
+```
+
+Check:
+
+```text
+GitHub hook trigger for GITScm polling
+```
+
+Save.
+
+---
+
+# PHASE 8 — RUN PIPELINE
+
+# Step 39 — Run Jenkins Pipeline
+
+Click:
+
+```text
+Build Now
+```
+
+Pipeline should:
+
+* Checkout code
+* Build app
+* Run SonarQube scan
+* Run quality gate
+* Run Trivy scan
+* Build Docker image
+* Push image to ECR
+
+---
+
+# Step 40 — Verify ECR Images
+
+Go to AWS Console:
+
+ECR → my-app-repo
+
+Verify pushed images.
+
+---
+
+# PHASE 9 — OPTIONAL EKS DEPLOYMENT
+
+# Step 41 — Enable EKS Infrastructure
+
+In:
+
+```text
+terraform.tfvars
+```
+
+Change:
+
+```hcl
+enable_eks = true
+```
+
+---
+
+# Step 42 — Apply Terraform Again
+
+Run:
+
+```bash
+terraform apply
+```
+
+Terraform now creates:
+
+* EKS cluster
+* Node groups
+
+---
+
+# Step 43 — Enable Deployment Stage in Jenkinsfile
+
+Change:
+
+```groovy
+DEPLOY_TO_EKS = "false"
+```
+
+TO:
+
+```groovy
+DEPLOY_TO_EKS = "true"
+```
+
+---
+
+# Step 44 — Run Pipeline Again
+
+Pipeline now ALSO:
+
+* Updates kubeconfig
+* Deploys application using Helm
+
+---
+
+# Step 45 — Verify Kubernetes Deployment
+
+SSH into Jenkins EC2.
+
+Run:
+
+```bash
+kubectl get nodes
+```
+
+Then:
+
+```bash
+kubectl get pods -A
+```
+
+---
+
+# FINAL STATE
+
+You now have:
+
+* Modular Terraform architecture
+* Immutable Jenkins infrastructure
+* SonarQube quality analysis
+* Quality Gates
+* GitHub webhooks
+* SonarQube webhooks
+* Trivy image scanning
+* ECR integration
+* Optional EKS deployment
+* Helm-based Kubernetes deployment
+
+This is now a strong production-style DevOps platform.

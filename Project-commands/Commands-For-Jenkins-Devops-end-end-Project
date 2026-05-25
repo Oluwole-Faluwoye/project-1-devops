@@ -755,7 +755,18 @@ pipeline {
 
 ------------------------------------------------------------------
 -------------------------------------------------------------------
+I am constantly having issues with my disk space (Volume on EC2 machine) 
 
+Fix 
+
+Upgrade your volume:
+
+8GB → 25GB minimum
+
+Then expand:
+
+sudo growpart /dev/nvme0n1 1
+sudo resize2fs /dev/nvme0n1p1
 
 
 AFTER RESTART
