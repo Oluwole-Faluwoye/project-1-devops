@@ -198,18 +198,37 @@ pipeline {
 
             steps {
 
-                dir('app') {
+                sh '''
 
-                    sh '''
-                        aws eks update-kubeconfig \
-                          --region $AWS_REGION \
-                          --name devops-cluster
+                    echo "====================================="
+                    echo "DETECTING HELM CHART LOCATION"
+                    echo "====================================="
 
-                        helm upgrade --install my-app ./helm/my-app \
-                          --set image.repository=$ECR_REPO \
-                          --set image.tag=$IMAGE_TAG
-                    '''
-                }
+                    CHART_PATH=$(find . -name Chart.yaml | head -n 1 | xargs dirname)
+
+                    echo "Detected Helm Chart Path: $CHART_PATH"
+
+                    if [ -z "$CHART_PATH" ]; then
+                        echo "ERROR: Helm chart not found"
+                        exit 1
+                    fi
+
+                    echo "====================================="
+                    echo "UPDATING KUBECONFIG"
+                    echo "====================================="
+
+                    aws eks update-kubeconfig \
+                      --region $AWS_REGION \
+                      --name devops-cluster
+
+                    echo "====================================="
+                    echo "DEPLOYING WITH HELM"
+                    echo "====================================="
+
+                    helm upgrade --install my-app $CHART_PATH \
+                      --set image.repository=$ECR_REPO \
+                      --set image.tag=$IMAGE_TAG
+                '''
             }
         }
 
