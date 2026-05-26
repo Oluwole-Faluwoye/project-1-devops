@@ -16,7 +16,7 @@ pipeline {
 
         IMAGE_NAME    = "my-app:${BUILD_NUMBER}"
 
-        DEPLOY_TO_EKS = "false"
+        DEPLOY_TO_EKS = "true"
     }
 
     stages {

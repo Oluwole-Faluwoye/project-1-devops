@@ -1,7 +1,7 @@
 ###### THIS IS WHERE YOU OVERRIDE DEFAULT VALUES SAFELY #####################
 
 region      = "us-east-1"
-enable_eks  = false
+enable_eks  = true
 
 key_name    = "us-east-1-key"
 

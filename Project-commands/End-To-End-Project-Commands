@@ -1,5 +1,18 @@
 # Complete DevOps Platform Setup Runbook
 
+
+To avoid the eks cluster being created when you havent completed your Jenkins configuration, ensure  that inside your terraform.tfvars you have (Note: You will still change it later to true when you are done with your Jenkins and Sonarqube configurations)
+
+enable_eks  = false 
+
+Also inside your jenkinsfile 
+
+for the first ci build if you do not want to push to the EKS cluster yet, ensure 
+
+Deploy to EKS = false 
+
+and when you want to deploy into the cluster change it to true
+
 # Overview
 
 This document covers the FULL setup process for:
@@ -268,6 +281,24 @@ Verify:
 * SonarQube container running
 
 ---
+Also verify Docker network and sure both sonarqube and Jenkins are using them you will need this for webhooks 
+
+docker inspeck jenkins
+
+docker inspect sonarqube
+
+Look for:
+
+"devops-network"
+
+inside:
+
+Networks
+
+both containers should show:
+
+devops-network
+
 
 # Step 18 — Verify Node.js Inside Jenkins
 
@@ -901,10 +932,7 @@ Verify pushed images.
 
 # Step 41 — Enable EKS Infrastructure
 
-In:
-
-```text
-terraform.tfvars
+Inside terraform.tfvars
 ```
 
 Change:
@@ -927,6 +955,20 @@ Terraform now creates:
 
 * EKS cluster
 * Node groups
+
+After apply completes run:
+
+aws eks update-kubeconfig \
+  --region us-east-1 \
+  --name devops-cluster
+
+Then:
+
+kubectl get nodes
+
+Expected:
+
+STATUS = Ready
 
 ---
 
