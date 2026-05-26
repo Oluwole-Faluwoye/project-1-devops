@@ -36,35 +36,35 @@ This guide is written step-by-step for future reuse.
 
 # Step 1 — Create Jenkins Dockerfile
 
-Create a file named:
+The dockerfile to create our custom jenkins image is inside this folder and its name dockerfile:
 
-```text
-Dockerfile
-```
 
-Add:
+IMPORTANT
 
-```dockerfile
-FROM jenkins/jenkins:lts
+Before building the image:
 
-USER root
+Verify Docker group ID on EC2 host:
 
-RUN apt-get update && apt-get install -y \
-    docker.io \
-    git \
-    curl \
-    unzip
+getent group docker
 
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
+Example output:
 
-RUN apt-get install -y awscli
+docker:x:992:
 
-USER jenkins
-```
+If not 992,
+change this line in Dockerfile:
 
+RUN groupmod -g 992 docker
+
+to the correct ID.
+
+This is VERY important for Docker socket permissions.
 ---
+------------------------------------------------------------------------------------
+YOU MUST DO THIS BEFORE YOU RUN TERRAFORM PLAN OR APPLY
+BECAUSE OUR JENKINS CONTAINER WILL USE IT WHEN SPINNING UP
 
+FOR STEPS TO CREATE THE EC2 AND BUILD THIS CUSTOM IMAGE  CHECK THIS FOLDER FOR COMMANDS TO BUILD AND PUSH JENKINS FILE  AND FOLLOW THE STEPS ( Similar to what is here but has more explanation about how to copy the file inside your instance from your local, how to give it the IAM role needed to push to ECR etc )
 # Step 2 — Build Jenkins Image
 
 SSH into your temporary build EC2 instance.

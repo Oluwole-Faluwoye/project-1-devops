@@ -71,7 +71,7 @@ aws ecr get-login-password --region us-east-1 \
 
 The <account-id> should be your account id
 
-
+761018849945
 🚀 STEP 8 — Tag Image
 
 docker tag jenkins-custom:latest \
@@ -83,6 +83,7 @@ docker tag jenkins-custom:latest \
 docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
 
 
+docker push 761018849945.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
 
 💣 STEP 10 — Destroy the Build Instance
 

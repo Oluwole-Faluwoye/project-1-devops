@@ -234,7 +234,7 @@ pipeline {
 
         always {
 
-            cleanWs()
+            echo "Skipping workspace cleanup temporarily"
         }
     }
 }
