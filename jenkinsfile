@@ -42,11 +42,20 @@ pipeline {
             steps {
 
                 sh '''
-                    echo "Current Directory:"
+                    echo "====================================="
+                    echo "CURRENT DIRECTORY"
+                    echo "====================================="
                     pwd
 
-                    echo "Workspace Contents:"
+                    echo "====================================="
+                    echo "WORKSPACE CONTENTS"
+                    echo "====================================="
                     ls -R
+
+                    echo "====================================="
+                    echo "SEARCHING FOR CHART.YAML"
+                    echo "====================================="
+                    find . -name Chart.yaml || true
                 '''
             }
         }
@@ -174,7 +183,7 @@ pipeline {
         }
 
         // ====================================================
-        // OPTIONAL DEPLOY TO EKS
+        // DEPLOY TO EKS WITH HELM
         // ====================================================
 
         stage('Deploy to EKS (Helm)') {
@@ -189,15 +198,18 @@ pipeline {
 
             steps {
 
-                sh '''
-                    aws eks update-kubeconfig \
-                      --region $AWS_REGION \
-                      --name devops-cluster
+                dir('app') {
 
-                    helm upgrade --install my-app ./helm/my-app \
-                      --set image.repository=$ECR_REPO \
-                      --set image.tag=$IMAGE_TAG
-                '''
+                    sh '''
+                        aws eks update-kubeconfig \
+                          --region $AWS_REGION \
+                          --name devops-cluster
+
+                        helm upgrade --install my-app ./helm/my-app \
+                          --set image.repository=$ECR_REPO \
+                          --set image.tag=$IMAGE_TAG
+                    '''
+                }
             }
         }
 
