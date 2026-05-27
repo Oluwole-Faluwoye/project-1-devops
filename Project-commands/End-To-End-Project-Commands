@@ -13,6 +13,33 @@ Deploy to EKS = false
 
 and when you want to deploy into the cluster change it to true
 
+-------------------------------------------------
+
+Please note: Uncomment this part both in your jenkins module and ECR module (BEFORE  STARTING your project )
+
+#  lifecycle {
+
+#    prevent_destroy = true
+#  }
+
+
+BUT WHEN YOU ARE DONE AND WANT TO RUN " terrafrom destroy" DEPENDING ON WHAT YOU WANT TO DO,
+
+
+If you want to keep your EBS volume that was mounted and your ECR repo, "Remove the comments both in your jenkins and ECR module the lifecycle section"..
+
+
+
+When you comment both, it ALLOWS you to delete both the mounted EBS volume and the ECR repository where our jenkins image lives when you run terraform destroy. Because "prevent_destroy = true" would prevent terraform from destroying these two resouces if uncommented 
+
+BUT
+
+ when commented out it allows you destroy the resources. This is helpful for a total cleanup and you wont be charged for any resources ( i.e learning purposes ). 
+
+But if it is a production scenario, you would  not delete the two resources i.e when you want to run terraform destroy, you uncomment it. 
+
+--------------------------------------------------------------------------------------------
+
 # Overview
 
 This document covers the FULL setup process for:
