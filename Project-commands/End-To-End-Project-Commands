@@ -669,20 +669,52 @@ Go to:
 Administration
 → Quality Gates
 
-Create:
+Create Quality Gate----
 
-Production-Gate
+Name it:
 
-Add conditions like:
+DevOps-Production-Gate
 
-Metric	Condition
-Bugs	> 0
-Vulnerabilities	> 0
-Code Smells	> 10
-Coverage	< 80%
-Duplications	> 5%
+✅ Step 3 — Add conditions (THIS is the important part)
 
-Then assign project to this gate.
+Click Add Condition and add these:
+
+Critical ones
+Bugs > 0 → FAIL
+Vulnerabilities > 0 → FAIL
+Security Hotspots Reviewed < 100% → FAIL
+🟡 Code quality
+Code Smells > 50 → FAIL
+Coverage < 80% → FAIL
+Duplications > 3% → FAIL
+🎯 For your Node app (simple version)
+
+If you want lean setup:
+
+Bugs > 0
+Vulnerabilities > 0
+
+👉 That alone is enough for your project
+
+✅ Step 4 — Set as default
+
+Click:
+
+Set as Default
+
+✅ Step 5 — Attach to your project
+
+Go:
+
+Projects → your project → Project Settings → Quality Gate
+
+Select:
+
+Always use the instance default Quality Gate
+
+Current:
+
+DevOps-Production-Gate
 
 
 # Step 32 — Verify Jenkinsfile Quality Gate Stage
@@ -895,6 +927,24 @@ GitHub hook trigger for GITScm polling
 Save.
 
 ---
+-------------------------------------------------------------------------------------------
+NOTE: this in your jenkinsfile and in your repo, Helm only recognizes capital letter "C" for the name of the chart file " Chart.yaml"  and that is what the name of the chart file must be saved as in the repo as well..
+
+This is specifically a Helm requirement.
+
+Helm itself ONLY recognizes:
+
+Chart.yaml
+
+with:
+
+capital C
+lowercase yaml
+
+exactly like that.
+
+------------------------------------------------------------------------------------------------
+
 
 # PHASE 8 — RUN PIPELINE
 
@@ -1015,6 +1065,26 @@ kubectl get pods -A
 
 ---
 
+Useful Verification Commands
+
+View running pods:
+
+kubectl get pods
+
+View services:
+
+kubectl get svc
+
+View deployments:
+
+
+kubectl get deployments
+
+View Helm releases:
+
+helm list -A
+
+
 # FINAL STATE
 
 You now have:
@@ -1031,3 +1101,82 @@ You now have:
 * Helm-based Kubernetes deployment
 
 This is now a strong production-style DevOps platform.
+
+
+BETTER PRACTICE BEFORE DESTROY
+
+Before:
+
+terraform destroy
+
+you should FIRST delete Kubernetes services manually:
+
+kubectl delete svc my-app-service
+
+OR BETTER STILL 
+
+kubectl delete svc --all
+
+Then wait a few minutes.
+
+NOTE : Cleaning Elb and the whole setup will take time.  so the above method help to delete the loadbalancer service first manually using the kubernetes network which is ususally faster and helps save some time
+
+Then run:
+
+terraform destroy
+
+You will run into an error "prevent_destroy set"
+
+which blocks destruction of the EBS volume"  because we enforced 
+
+Recommended for Learning/Lab Environment
+
+Temporarily remove prevent_destroy.
+
+Find this resource in your Jenkins module:
+
+resource "aws_ebs_volume" "jenkins_data" {
+
+You’ll see something like:
+
+lifecycle {
+  prevent_destroy = true
+}
+
+Temporarily comment it out:
+
+# lifecycle {
+#   prevent_destroy = true
+# }
+
+Save file.
+
+Then run:  terraform destroy
+
+
+
+IN REAL WORLD SCENARIO 
+
+Keep Jenkins Volume
+
+If you want to preserve Jenkins data:
+
+Use targeted destroy.
+
+Example:
+
+terraform destroy \
+-target=module.eks \
+-target=module.vpc
+
+This leaves:
+
+Jenkins EBS volume
+Jenkins persistence
+
+but destroys:
+
+EKS
+networking
+Kubernetes infrastructure
+

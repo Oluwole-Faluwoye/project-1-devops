@@ -241,7 +241,7 @@ pipeline {
             steps {
 
                 sh '''
-                    docker system prune -af || true
+                    docker image prune -af || true
                 '''
             }
         }

@@ -6,8 +6,11 @@ Use Terraform (or console if you want speed for now)
 
 Minimum spec:
 Instance: t3.medium (or t3.large if faster builds needed)
+
 Storage: 30–50GB (important)
+
 OS: Amazon Linux 2 or Ubuntu
+
 🔐 Attach IAM Role (IMPORTANT)
 
 Attach policy:
@@ -38,22 +41,23 @@ docker --version
 docker run hello-world
 🚀 STEP 4 — Copy Your Dockerfile to EC2
 
-From your local machine:
+From your local machine the directory(folder where you have the docker file for your jenkins image) ( mine is in project-commands folder):
 
 scp -i your-key.pem Dockerfile ec2-user@<public-ip>:/home/ec2-user/
 
 mine :   scp -i ~/Downloads/us-east-1-key.pem dockerfile ec2-user@<public-ip>:/home/ec2-user/
 dockerfile 
 
-If you have more files:
+If you have more files you want to move into your Jenkins EC2 run this:
 
 scp -i your-key.pem -r . ec2-user@<public-ip>:/home/ec2-user/
+
 
 🚀 STEP 5 — Build Image on EC2
 
 docker build -t jenkins-custom .
 
-🚀 STEP 6 — Create Repo in Amazon ECR
+🚀 STEP 6 — Create Repo in Amazon ECR or if you already have ECR repo, skip this step, just log into it and push
 
 aws ecr create-repository \
   --repository-name jenkins \
@@ -71,19 +75,25 @@ aws ecr get-login-password --region us-east-1 \
 
 The <account-id> should be your account id
 
-761018849945
+
 🚀 STEP 8 — Tag Image
 
+(  Note : You can tag your Image as v1 or  v2 or v3 etc. depending on the version of your app  but ensure it is consistent and that is what you call in your setup.sh script if you tag it v1 call v1 in your script if you tage it v2 call v2 in your script)
+
 docker tag jenkins-custom:latest \
-<account-id>.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
+<account-id>.dkr.ecr.us-east-1.amazonaws.com/jenkins:vi
 
 
+docker tag jenkins-custom:latest \
+761018849945.dkr.ecr.us-east-1.amazonaws.com/jenkins:v1
 
 🚀 STEP 9 — Push Image
-docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/jenkins:v1
 
 
-docker push 761018849945.dkr.ecr.us-east-1.amazonaws.com/jenkins:latest
+docker push 761018849945.dkr.ecr.us-east-1.amazonaws.com/jenkins:v1
+
+
 
 💣 STEP 10 — Destroy the Build Instance
 
